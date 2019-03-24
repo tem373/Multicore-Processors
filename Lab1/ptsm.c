@@ -5,8 +5,8 @@
 // Global variables
 int cost = 0;
 int num_cities = 0;
-int cost_matrix[25][25];
-int visited_cities[10];
+int cost_matrix[10][10];    // max 10 cities
+int visited_cities[10];     // max 10 cities
 
 /********************************** HELPER FUNCTIONS ********************************/
 int tsp(int c) {//, int cost_matrix[][num_cities-1], int visited_cities[]) {
@@ -78,8 +78,8 @@ int main(int argc, char* argv[]) {
     fclose(infile);
 
     // Solve the travelling salesman problem
-    for (int i=0; i<num_cities; i++) {
-        for (int j=0; j<num_cities; j++) {
+    for (int i=0; i<10; i++) {
+        for (int j=0; j<10; j++) {
             printf("%d ", cost_matrix[i][j]);
         }
         printf("\n");
