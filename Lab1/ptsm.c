@@ -38,9 +38,9 @@ void minimum_cost(int city) {//, int cost_matrix[][num_cities-1], int visited_ci
     nearest_city = tsp(city);//, cost_matrix, visited_cities);
     if(nearest_city == 999)
     {
-        nearest_city = 0;
-        printf("%d", nearest_city);
-        cost = cost + cost_matrix[city][nearest_city];
+//        nearest_city = 0;
+//        printf("%d", nearest_city);
+//        cost = cost + cost_matrix[city][nearest_city];
         return;
     }
     minimum_cost(nearest_city); //, cost_matrix, visited_cities);
