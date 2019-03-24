@@ -82,7 +82,7 @@ int main(int argc, char* argv[]) {
     printf("Best path: ");
     minimum_cost(0, cost_matrix, visited_cities);  // Start at city '0' by convention
     printf("\n");
-    printf("Distance: %d", cost);
+    printf("Distance: %d\n", cost);
 
     return 0;
 }
