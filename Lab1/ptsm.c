@@ -68,8 +68,8 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
     // Read in cost matrix
-    for(int row = 1; row <= num_cities; row++) {
-        for(int col = 1; col <= num_cities; col++) {
+    for(int row = 0; row < num_cities; row++) {
+        for(int col = 0; col < num_cities; col++) {
             int num;
             fscanf(infile, "%d ", &num);
             cost_matrix[row][col] = num;
@@ -78,7 +78,12 @@ int main(int argc, char* argv[]) {
     fclose(infile);
 
     // Solve the travelling salesman problem
-
+    for (int i=0; i<num_cities; i++) {
+        for (int j=0; j<num_cities; j++) {
+            printf("%d ", cost_matrix[i][j]);
+        }
+        printf("\n");
+    }
 
     // Output results
     printf("Best path: ");
