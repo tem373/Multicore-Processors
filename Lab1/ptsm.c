@@ -5,9 +5,11 @@
 // Global variables
 int cost = 0;
 int num_cities = 0;
+int cost_matrix[25][25];
+int visited_cities[10];
 
 /********************************** HELPER FUNCTIONS ********************************/
-int tsp(int c, int cost_matrix[][num_cities-1], int visited_cities[]) {
+int tsp(int c) {//, int cost_matrix[][num_cities-1], int visited_cities[]) {
     int count, nearest_city = 999;
     int minimum = 999, temp;
     for(count = 0; count < num_cities; count++)
@@ -29,11 +31,11 @@ int tsp(int c, int cost_matrix[][num_cities-1], int visited_cities[]) {
     return nearest_city;
 }
 
-void minimum_cost(int city, int cost_matrix[][num_cities-1], int visited_cities[]) {
+void minimum_cost(int city) {//, int cost_matrix[][num_cities-1], int visited_cities[]) {
     int nearest_city;
     visited_cities[city] = 1;
     printf("%d ", city);
-    nearest_city = tsp(city, cost_matrix, visited_cities);
+    nearest_city = tsp(city);//, cost_matrix, visited_cities);
     if(nearest_city == 999)
     {
         nearest_city = 0;
@@ -41,7 +43,7 @@ void minimum_cost(int city, int cost_matrix[][num_cities-1], int visited_cities[
         cost = cost + cost_matrix[city][nearest_city];
         return;
     }
-    minimum_cost(nearest_city, cost_matrix, visited_cities);
+    minimum_cost(nearest_city); //, cost_matrix, visited_cities);
 }
 
 /*********************************** MAIN FUNCTION **********************************/
@@ -56,8 +58,8 @@ int main(int argc, char* argv[]) {
     // Initialize variables + assign input numbers
     num_cities = atoi(argv[1]);
     int num_threads = atoi(argv[2]);
-    int cost_matrix[num_cities-1][num_cities-1];
-    int visited_cities[num_cities-1];  // Optimal route will be stored here
+    //int cost_matrix[num_cities-1][num_cities-1];
+    //int visited_cities[num_cities-1];  // Optimal route will be stored here
 
     // Open File
     FILE *infile = fopen(argv[3], "r");
@@ -80,7 +82,7 @@ int main(int argc, char* argv[]) {
 
     // Output results
     printf("Best path: ");
-    minimum_cost(0, cost_matrix, visited_cities);  // Start at city '0' by convention
+    minimum_cost(0); //, cost_matrix, visited_cities);  // Start at city '0' by convention
     printf("\n");
     printf("Distance: %d\n", cost);
 
