@@ -80,10 +80,8 @@ int main(int argc, char* argv[]) {
 
     // Output results
     printf("Best path: ");
-    //minimum_cost(0);  // Start at city '0' by convention
-//    for (int i=0; i<num_cities; i++) {
-//        printf("%d ", routev[i]);
-//    }
+    minimum_cost(0);  // Start at city '0' by convention
+    printf("\n");
     printf("Distance: %d", cost);
 
     return 0;
