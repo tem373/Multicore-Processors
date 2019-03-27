@@ -12,20 +12,16 @@ int visited_cities[10];     // max 10 cities
 int tsp(int c) {//, int cost_matrix[][num_cities-1], int visited_cities[]) {
     int count, nearest_city = 999;
     int minimum = 999, temp;
-    for(count = 0; count < num_cities; count++)
-    {
-        if((cost_matrix[c][count] != 0) && (visited_cities[count] == 0))
-        {
-            if(cost_matrix[c][count] + cost_matrix[count][c] < minimum)
-            {
+    for(count = 0; count < num_cities; count++) {
+        if((cost_matrix[c][count] != 0) && (visited_cities[count] == 0)) {
+            if(cost_matrix[c][count] + cost_matrix[count][c] < minimum) {
                 minimum = cost_matrix[count][0] + cost_matrix[c][count];
                 temp = cost_matrix[c][count];
                 nearest_city = count;
             }
         }
     }
-    if(minimum != 999)
-    {
+    if(minimum != 999) {
         cost = cost + temp;
     }
     return nearest_city;
@@ -36,11 +32,7 @@ void minimum_cost(int city) {//, int cost_matrix[][num_cities-1], int visited_ci
     visited_cities[city] = 1;
     printf("%d ", city);
     nearest_city = tsp(city);//, cost_matrix, visited_cities);
-    if(nearest_city == 999)
-    {
-//        nearest_city = 0;
-//        printf("%d", nearest_city);
-//        cost = cost + cost_matrix[city][nearest_city];
+    if(nearest_city == 999) {
         return;
     }
     minimum_cost(nearest_city); //, cost_matrix, visited_cities);
@@ -77,14 +69,6 @@ int main(int argc, char* argv[]) {
     }
     fclose(infile);
 
-    // Solve the travelling salesman problem
-    for (int i=0; i<10; i++) {
-        for (int j=0; j<10; j++) {
-            printf("%d ", cost_matrix[i][j]);
-        }
-        printf("\n");
-    }
-
     // Output results
     printf("Best path: ");
     minimum_cost(0); //, cost_matrix, visited_cities);  // Start at city '0' by convention
@@ -93,3 +77,4 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
+
