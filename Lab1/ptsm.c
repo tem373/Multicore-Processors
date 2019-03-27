@@ -16,12 +16,12 @@ int tsp(int c) {//, int cost_matrix[][num_cities-1], int visited_cities[]) {
     {
         if((cost_matrix[c][count] != 0) && (visited_cities[count] == 0))
         {
-            if(cost_matrix[c][count] < minimum)
+            if(cost_matrix[c][count] + cost_matrix[count][c] < minimum)
             {
                 minimum = cost_matrix[count][0] + cost_matrix[c][count];
+                temp = cost_matrix[c][count];
+                nearest_city = count;
             }
-            temp = cost_matrix[c][count];
-            nearest_city = count;
         }
     }
     if(minimum != 999)
