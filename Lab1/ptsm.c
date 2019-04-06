@@ -3,17 +3,17 @@
 #include <omp.h>
 #include <time.h>
 
-#define MAX_SIZE 10000
+#define MAX_SIZE 10
 
 // Global variables
 int cost = 0;
 int num_cities = 0;
 int num_threads = 0;
 int cost_matrix[MAX_SIZE][MAX_SIZE];    // max 10 cities
-int visited_cities[MAX_SIZE];     // max 10 cities
+int visited_cities[MAX_SIZE];           // max 10 cities
 
 /********************************** HELPER FUNCTIONS ********************************/
-int tsp(int c) {
+int searchroute(int c) {
     int count, nearest_city = 999;
     int minimum = 999, temp;
     
@@ -27,7 +27,6 @@ int tsp(int c) {
             }
         }
     }
-    //#pragma omp critical
     if(minimum != 999) {
         cost = cost + temp;
     }
@@ -36,11 +35,11 @@ int tsp(int c) {
 
 void minimum_cost(int city) {
     // Follows the branch and bound algorithm - calculates minimum cost per city
-    // from undirected graph in tsp() method and assigns each city a new next path
+    // from undirected graph in searchroute() method and assigns each city a new next path
     int nearest_city;
     visited_cities[city] = 1;
     printf("%d ", city);
-    nearest_city = tsp(city);
+    nearest_city = searchroute(city);
 
     // Base case - do nothing here to reflect "no return trip"
     if(nearest_city == 999) {
@@ -83,7 +82,7 @@ int main(int argc, char* argv[]) {
     fclose(infile);
 
     // Output results
-    printf("Best path: ");
+    printf("Optimal path: ");
     minimum_cost(0);  // Start at city '0' by convention
     printf("\n");
     printf("Distance: %d\n", cost);
