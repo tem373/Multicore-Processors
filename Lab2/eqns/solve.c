@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <mpi.h>
 
 /*** Skeleton for Lab 2 ***/
 
@@ -125,30 +126,62 @@ void get_input(char filename[]) {
 }
 
 int updateUnknowns() {
+    /* MPI setup */
+    int comm_sz;
+    int ps_id;
+    //MPI_Status status;
+
+    MPI_Init(NULL, NULL);
+    MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
+    MPI_Comm_rank(MPI_COMM_WORLD, &ps_id);
+
     float x_newarr[num];
     int done = 1;
+    float x_old;
+    float x_new;
     // Update value element wise
-    for (int i=0; i < num; i++) {
-        float x_old = x[i];
-        float x_new = b[i]; // initialize to coefficient
-        for (int j=0; j < num; j++) {
+    if (ps_id == 0 && comm_sz > 1) { /* Master rank */
+        MPI_Bcast(x, num, MPI_FLOAT, 0, MPI_COMM_WORLD);
+        MPI_Bcast(a, num, MPI_FLOAT, 0, MPI_COMM_WORLD);
+        MPI_Bcast(b, num, MPI_FLOAT, 0, MPI_COMM_WORLD);
+    }
+    //if (ps_id != 0 && comm_sz > 1) {
+    for (int i = 0; i < num; i++) {
+        x_old = x[ps_id];
+        x_new = b[ps_id]; // initialize to coefficient
+        for (int j = 0; j < num; j++) {
             // Use the equation to update the values of
-            if (i != j) {
-                x_new -= a[i][j] * x[j];
+            if (ps_id != j) {
+                x_new -= a[ps_id][j] * x[j];
             }
         }
-        x_new /= a[i][i];
+        x_new /= a[ps_id][ps_id];
 
         // Check error
+        // TODO: MPI reduce this?
         float rel_err = fabs((x_new - x_old) / x_new);
         if (rel_err >= err) {
             done = 0;
         }
-        x_newarr[i] = x_new;
+        if (ps_id != 0 && comm_sz > 1) {
+            MPI_Send(&x_new, 1, MPI_FLOAT, 0, 1, MPI_COMM_WORLD);
+            MPI_Send(&done, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
+        }
+        //x_newarr[ps_id] = x_new;
     }
+    if(ps_id == 0 && comm_sz > 1) {
+        for (int i = 1; i < num; i++ ) {
+            MPI_Recv(&x_new, 1, MPI_FLOAT, MPI_ANY_SOURCE, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            MPI_Recv(&done, 1, MPI_INT, MPI_ANY_SOURCE, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+    }
+
+
     for (int i=0; i < num; i++) {
         x[i] = x_newarr[i];
     }
+
+    MPI_Finalize();
     return done;
 }
 
@@ -163,7 +196,7 @@ int main(int argc, char *argv[]) {
     char output[100] ="";
   
     if( argc != 2) {
-        printf("Usage: ./gsref filename\n");
+        printf("Usage: ./solve filename\n");
         exit(1);
     }
   
@@ -207,7 +240,6 @@ int main(int argc, char *argv[]) {
     printf("total number of iterations: %d\n", nit);
  
     fclose(fp);
- 
     exit(0);
 
 }
