@@ -125,64 +125,111 @@ void get_input(char filename[]) {
 
 }
 
-int updateUnknowns() {
+int updateUnknowns(int n_iter) {
     /* MPI setup */
     int comm_sz;
     int ps_id;
-    //MPI_Status status;
-
-    MPI_Init(NULL, NULL);
     MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
     MPI_Comm_rank(MPI_COMM_WORLD, &ps_id);
 
-    float x_newarr[num];
-    int done = 1;
-    float x_old;
-    float x_new;
+    // Calculate the size of the "batch"
+    int batch_sz = (int) (num / comm_sz);
+    int batch_start, batch_end;
+    int offset = num % comm_sz;
+    int all_done = 1;
+    int proc_done = 1;
+    float *x_old = (float *) malloc(num * sizeof(float));
+    float *x_new  = (float *) malloc(num * sizeof(float));
+
     // Update value element wise
-    if (ps_id == 0 && comm_sz > 1) { /* Master rank */
-        MPI_Bcast(x, num, MPI_FLOAT, 0, MPI_COMM_WORLD);
-        MPI_Bcast(a, num, MPI_FLOAT, 0, MPI_COMM_WORLD);
-        MPI_Bcast(b, num, MPI_FLOAT, 0, MPI_COMM_WORLD);
-    }
-    //if (ps_id != 0 && comm_sz > 1) {
-    for (int i = 0; i < num; i++) {
-        x_old = x[ps_id];
-        x_new = b[ps_id]; // initialize to coefficient
-        for (int j = 0; j < num; j++) {
-            // Use the equation to update the values of
-            if (ps_id != j) {
-                x_new -= a[ps_id][j] * x[j];
+    if (ps_id == 0) { /* Master process */
+//        MPI_Bcast(x, num, MPI_FLOAT, 0, MPI_COMM_WORLD);
+//        MPI_Bcast(a, num, MPI_FLOAT, 0, MPI_COMM_WORLD);
+//        MPI_Bcast(b, num, MPI_FLOAT, 0, MPI_COMM_WORLD);
+
+        batch_start = 0;
+        batch_end = batch_sz-1;
+
+        x_old[ps_id] = x[ps_id]; /* move x_old = x */
+        for (int i = 1; i < comm_sz; i++) {
+            MPI_Send(&x_old[0], num, MPI_FLOAT, i, 1, MPI_COMM_WORLD); /* send chunks to children */
+            MPI_Send(&x_new[i * batch_sz], batch_sz, MPI_FLOAT, i, 1, MPI_COMM_WORLD);
+        }
+
+        for (int i = batch_start; i < batch_end + offset; i++) { /* do work */
+            float x_prev = x[i];
+            float x_next = b[i]; // initialize to coefficient
+            for (int j = 0; j < num; j++) {
+                // Use the equation to update the values of
+                if (i != j) {
+                    x_next -= a[i][j] * x_old[j];
+                }
             }
-        }
-        x_new /= a[ps_id][ps_id];
+            x_next /= a[i][i];
 
-        // Check error
-        // TODO: MPI reduce this?
-        float rel_err = fabs((x_new - x_old) / x_new);
-        if (rel_err >= err) {
-            done = 0;
+            // Check error TODO: MPI reduce this?
+            float rel_err = fabs((x_next - x_prev) / x_next);
+            if (rel_err >= err) {
+                proc_done = 0;
+            }
+
+            x_new[i] = x_next; /* x_next -> x */
         }
-        if (ps_id != 0 && comm_sz > 1) {
-            MPI_Send(&x_new, 1, MPI_FLOAT, 0, 1, MPI_COMM_WORLD);
-            MPI_Send(&done, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
+        all_done = proc_done;
+
+        for (int i = 1; i < comm_sz; i++) {
+            MPI_Recv(&proc_done, 1, MPI_INT, i, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE); /* receive child work */
+            MPI_Recv(&x_new[i * batch_sz], batch_sz, MPI_FLOAT, i, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE); /* receive child work */
+            all_done *= proc_done;
         }
-        //x_newarr[ps_id] = x_new;
+        //x_new[i] = x_new; /* x_next -> x */
+        if (all_done == 0) {
+            MPI_Send(&all_done, 1, MPI_INT, 0, 1, MPI_COMM_WORLD); /* send halt to children */
+        }
+
     }
-    if(ps_id == 0 && comm_sz > 1) {
-        for (int i = 1; i < num; i++ ) {
-            MPI_Recv(&x_new, 1, MPI_FLOAT, MPI_ANY_SOURCE, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            MPI_Recv(&done, 1, MPI_INT, MPI_ANY_SOURCE, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    else if (ps_id != 0) { /* All other processes */
+        batch_start = ps_id * batch_sz;
+        batch_end = ((ps_id+1) * batch_sz)-1;
+
+        MPI_Recv(&x_old[0], num, MPI_FLOAT, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE); /* receive chunk */
+        MPI_Recv(&x_new[batch_start], batch_sz, MPI_FLOAT, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE); /* receive chunk */
+
+        for (int i = batch_start; i < batch_end; i++) { /* do work */
+            float x_prev = x[i];
+            float x_next = b[i]; // initialize to coefficient
+            for (int j = 0; j < num; j++) {
+                // Use the equation to update the values of
+                if (i != j) {
+                    x_next -= a[i][j] * x_old[j];
+                }
+            }
+            x_next /= a[i][i];
+
+            // Check error
+            // TODO: MPI reduce this?
+            float rel_err = fabs((x_next - x_prev) / x_next);
+            if (rel_err >= err) {
+                proc_done = 0;
+            }
+
+            x_new[i] = x_next;
+        }
+
+        MPI_Send(&proc_done, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
+        MPI_Send(&x_new[batch_start], batch_sz, MPI_FLOAT, 0, 1, MPI_COMM_WORLD); /* send chunks */
+        MPI_Recv(&all_done, 1, MPI_INT, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE); /* receive halt */
+
+        if (all_done) {
+            return all_done;
         }
     }
 
-
-    for (int i=0; i < num; i++) {
-        x[i] = x_newarr[i];
+    for (int i=0; i < num; i++) { /* set the new array to current x values for next round */
+        x[i] = x_new[i];
     }
 
-    MPI_Finalize();
-    return done;
+    return all_done;
 }
 
 /************************************************************/
@@ -210,14 +257,17 @@ int main(int argc, char *argv[]) {
     */
     check_matrix();
 
+    MPI_Init(NULL, NULL);
+
     // Iterations loop
     int foundSol = 0;
     while (!foundSol) {
         foundSol = 1;
-        foundSol = updateUnknowns();
+        foundSol = updateUnknowns(nit);
         nit++;
     }
 
+    MPI_Finalize();
 
     /* Writing results to file */
     sprintf(output,"my%d.sol",num);
