@@ -129,7 +129,6 @@ int updateUnknowns(int n_iter) {
     /* MPI setup */
     int comm_sz;
     int ps_id;
-    MPI_Status status;
     MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
     MPI_Comm_rank(MPI_COMM_WORLD, &ps_id);
 
@@ -151,9 +150,9 @@ int updateUnknowns(int n_iter) {
     MPI_Scatter(x_next, batch_sz, MPI_FLOAT, x_next_batch, batch_sz, MPI_FLOAT, 0, MPI_COMM_WORLD);
     MPI_Bcast(&x_prev[0], num, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
-    for (int i = 0; i < num; i++) { /* do work */
-        int global_i = batch_sz * ps_id;
-        float x_old = x[global_i];
+    for (int i = 0; i < batch_sz; i++) { /* do work */
+        int global_i = (batch_sz * ps_id) + i;
+        float x_old = x_prev[global_i];
         float x_new = b[global_i]; // initialize to coefficient
         for (int j = 0; j < num; j++) {
             // Use the equation to update the values of
@@ -168,7 +167,7 @@ int updateUnknowns(int n_iter) {
             proc_done = 0;
         }
 
-        x_next[i] = x_new; /* x_next -> x */
+        x_next_batch[i] = x_new; /* x_next -> x */
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
@@ -176,9 +175,8 @@ int updateUnknowns(int n_iter) {
     MPI_Gather(x_next_batch, batch_sz, MPI_FLOAT, x_next, batch_sz, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
     if (ps_id == 0) { /* Master process */
-        for (int i=0; i < num; i++) { /* set the new array to current x values for next round */
-            x[i] = x_next[i];
-        }
+        /* set the new array to current x values for next round */
+        x = x_next;
 
         if (all_done == 1) { /* write the output if its master process and if the processes have all completed */
             int k;
@@ -207,7 +205,6 @@ int updateUnknowns(int n_iter) {
             fclose(fp);
         }
     }
-
     return all_done;
 }
 
