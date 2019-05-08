@@ -244,28 +244,6 @@ int main(int argc, char *argv[]) {
     }
 
     MPI_Finalize();
-
-//    /* Writing results to file */
-//    sprintf(output,"my%d.sol",num);
-//    fp = fopen(output,"w");
-//    if(!fp) {
-//        printf("Cannot create the file %s\n", output);
-//        exit(1);
-//    }
-//
-//    for( i = 0; i < num; i++) {
-//        fprintf(fp, "%f\n", x[i]);
-//    }
-//
-//    printf("Unknowns\n");
-//    for( i = 0; i < num; i++) {
-//        printf("%f ", x[i]);
-//    }
-//    printf("\n");
-//
-//    printf("total number of iterations: %d\n", nit);
-//
-//    fclose(fp);
     exit(0);
 
 }
