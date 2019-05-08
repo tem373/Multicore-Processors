@@ -129,104 +129,83 @@ int updateUnknowns(int n_iter) {
     /* MPI setup */
     int comm_sz;
     int ps_id;
+    MPI_Status status;
     MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
     MPI_Comm_rank(MPI_COMM_WORLD, &ps_id);
 
     // Calculate the size of the "batch"
     int batch_sz = (int) (num / comm_sz);
-    int batch_start, batch_end;
-    int offset = num % comm_sz;
     int all_done = 1;
     int proc_done = 1;
-    float *x_old = (float *) malloc(num * sizeof(float));
-    float *x_new  = (float *) malloc(num * sizeof(float));
+    float *x_prev = (float *) malloc(num * sizeof(float));
+    float *x_next  = (float *) malloc(num * sizeof(float));
+    float *x_next_batch = (float *) malloc(batch_sz * sizeof(float));
 
     // Update value element wise
     if (ps_id == 0) { /* Master process */
-//        MPI_Bcast(x, num, MPI_FLOAT, 0, MPI_COMM_WORLD);
-//        MPI_Bcast(a, num, MPI_FLOAT, 0, MPI_COMM_WORLD);
-//        MPI_Bcast(b, num, MPI_FLOAT, 0, MPI_COMM_WORLD);
-
-        batch_start = 0;
-        batch_end = batch_sz-1;
-
-        x_old[ps_id] = x[ps_id]; /* move x_old = x */
-        for (int i = 1; i < comm_sz; i++) {
-            MPI_Send(&x_old[0], num, MPI_FLOAT, i, 1, MPI_COMM_WORLD); /* send chunks to children */
-            MPI_Send(&x_new[i * batch_sz], batch_sz, MPI_FLOAT, i, 1, MPI_COMM_WORLD);
-        }
-
-        for (int i = batch_start; i < batch_end + offset; i++) { /* do work */
-            float x_prev = x[i];
-            float x_next = b[i]; // initialize to coefficient
-            for (int j = 0; j < num; j++) {
-                // Use the equation to update the values of
-                if (i != j) {
-                    x_next -= a[i][j] * x_old[j];
-                }
-            }
-            x_next /= a[i][i];
-
-            // Check error TODO: MPI reduce this?
-            float rel_err = fabs((x_next - x_prev) / x_next);
-            if (rel_err >= err) {
-                proc_done = 0;
-            }
-
-            x_new[i] = x_next; /* x_next -> x */
-        }
-        all_done = proc_done;
-
-        for (int i = 1; i < comm_sz; i++) {
-            MPI_Recv(&proc_done, 1, MPI_INT, i, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE); /* receive child work */
-            MPI_Recv(&x_new[i * batch_sz], batch_sz, MPI_FLOAT, i, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE); /* receive child work */
-            all_done *= proc_done;
-        }
-        //x_new[i] = x_new; /* x_next -> x */
-        if (all_done == 0) {
-            MPI_Send(&all_done, 1, MPI_INT, 0, 1, MPI_COMM_WORLD); /* send halt to children */
-        }
-
-    }
-    else if (ps_id != 0) { /* All other processes */
-        batch_start = ps_id * batch_sz;
-        batch_end = ((ps_id+1) * batch_sz)-1;
-
-        MPI_Recv(&x_old[0], num, MPI_FLOAT, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE); /* receive chunk */
-        MPI_Recv(&x_new[batch_start], batch_sz, MPI_FLOAT, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE); /* receive chunk */
-
-        for (int i = batch_start; i < batch_end; i++) { /* do work */
-            float x_prev = x[i];
-            float x_next = b[i]; // initialize to coefficient
-            for (int j = 0; j < num; j++) {
-                // Use the equation to update the values of
-                if (i != j) {
-                    x_next -= a[i][j] * x_old[j];
-                }
-            }
-            x_next /= a[i][i];
-
-            // Check error
-            // TODO: MPI reduce this?
-            float rel_err = fabs((x_next - x_prev) / x_next);
-            if (rel_err >= err) {
-                proc_done = 0;
-            }
-
-            x_new[i] = x_next;
-        }
-
-        MPI_Send(&proc_done, 1, MPI_INT, 0, 1, MPI_COMM_WORLD);
-        MPI_Send(&x_new[batch_start], batch_sz, MPI_FLOAT, 0, 1, MPI_COMM_WORLD); /* send chunks */
-        MPI_Recv(&all_done, 1, MPI_INT, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE); /* receive halt */
-
-        if (all_done) {
-            return all_done;
+        for(int i = 0; i < num; i++) {
+            x_prev[i] = x[i];
         }
     }
 
-    for (int i=0; i < num; i++) { /* set the new array to current x values for next round */
-        x[i] = x_new[i];
+    MPI_Scatter(x_next, batch_sz, MPI_FLOAT, x_next_batch, batch_sz, MPI_FLOAT, 0, MPI_COMM_WORLD);
+    MPI_Bcast(&x_prev[0], num, MPI_FLOAT, 0, MPI_COMM_WORLD);
+
+    for (int i = 0; i < num; i++) { /* do work */
+        int global_i = batch_sz * ps_id;
+        float x_old = x[global_i];
+        float x_new = b[global_i]; // initialize to coefficient
+        for (int j = 0; j < num; j++) {
+            // Use the equation to update the values of
+            if (global_i != j) {
+                x_new -= a[global_i][j] * x_prev[j];
+            }
+        }
+        x_new /= a[global_i][global_i];
+
+        float rel_err = fabs((x_new - x_old) / x_new);
+        if (rel_err >= err) {
+            proc_done = 0;
+        }
+
+        x_next[i] = x_new; /* x_next -> x */
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Allreduce(&proc_done, &all_done, 1, MPI_INT, MPI_PROD, MPI_COMM_WORLD); /* check all done*/
+    MPI_Gather(x_next_batch, batch_sz, MPI_FLOAT, x_next, batch_sz, MPI_FLOAT, 0, MPI_COMM_WORLD);
+
+    if (ps_id == 0) { /* Master process */
+        for (int i=0; i < num; i++) { /* set the new array to current x values for next round */
+            x[i] = x_next[i];
+        }
+
+        if (all_done == 1) { /* write the output if its master process and if the processes have all completed */
+            int k;
+            FILE * fp;
+            char output[100] ="";
+
+            /* Writing results to file */
+            sprintf(output,"my%d.sol",num);
+            fp = fopen(output,"w");
+            if(!fp) {
+                printf("Cannot create the file %s\n", output);
+                exit(1);
+            }
+
+            for( k = 0; k < num; k++) {
+                fprintf(fp, "%f\n", x[k]);
+            }
+            printf("Unknowns\n");
+            for( k = 0; k < num; k++) {
+                printf("%f ", x[k]);
+            }
+            printf("\n");
+
+            printf("total number of iterations: %d\n", n_iter);
+
+            fclose(fp);
+        }
     }
 
     return all_done;
@@ -237,10 +216,10 @@ int updateUnknowns(int n_iter) {
 
 int main(int argc, char *argv[]) {
 
-    int i;
+    //int i;
     int nit = 0; /* number of iterations */
-    FILE * fp;
-    char output[100] ="";
+    //FILE * fp;
+    //char output[100] ="";
   
     if( argc != 2) {
         printf("Usage: ./solve filename\n");
@@ -269,27 +248,27 @@ int main(int argc, char *argv[]) {
 
     MPI_Finalize();
 
-    /* Writing results to file */
-    sprintf(output,"my%d.sol",num);
-    fp = fopen(output,"w");
-    if(!fp) {
-        printf("Cannot create the file %s\n", output);
-        exit(1);
-    }
-    
-    for( i = 0; i < num; i++) {
-        fprintf(fp, "%f\n", x[i]);
-    }
-
-    printf("Unknowns\n");
-    for( i = 0; i < num; i++) {
-        printf("%f ", x[i]);
-    }
-    printf("\n");
-
-    printf("total number of iterations: %d\n", nit);
- 
-    fclose(fp);
+//    /* Writing results to file */
+//    sprintf(output,"my%d.sol",num);
+//    fp = fopen(output,"w");
+//    if(!fp) {
+//        printf("Cannot create the file %s\n", output);
+//        exit(1);
+//    }
+//
+//    for( i = 0; i < num; i++) {
+//        fprintf(fp, "%f\n", x[i]);
+//    }
+//
+//    printf("Unknowns\n");
+//    for( i = 0; i < num; i++) {
+//        printf("%f ", x[i]);
+//    }
+//    printf("\n");
+//
+//    printf("total number of iterations: %d\n", nit);
+//
+//    fclose(fp);
     exit(0);
 
 }
